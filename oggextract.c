@@ -1,4 +1,7 @@
 /*
+ * Author: Adrian Keet
+ * Last modified 2020-11-14 by shockdude
+ *
  * This code is in the public domain. Go ahead and use it for whatever you
  * want. I don't care. :)
  */
@@ -18,9 +21,9 @@ int usage()
     return 255;
 }
 
-int findpattern(unsigned char *data, int datalen, int start)
+int findpattern(unsigned char *data, off_t datalen, off_t start)
 {
-    int i;
+	off_t i;
 
     for (i = start; i < datalen - 4; i++) {
         if (*(int *)(data + i) == 0x5367674f) { /* "OggS" */
@@ -82,10 +85,10 @@ int extract(char *filename)
 {
     int fd;
     struct stat statdata;
-    int filesize;
+    off_t filesize;
     unsigned char *filedata, *oggdata;
 
-    int pos = 0;
+    off_t pos = 0, newpos = 0;
 
     int pagelen;
     int outfd = -1;
@@ -114,27 +117,37 @@ int extract(char *filename)
 
     filedata = mmap(0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
 
-    outfilename = malloc(strlen(filename) + 16);
+    outfilename = malloc(strlen(filename) + 100);
 
     while (1) {
-        pos = findpattern(filedata, filesize, pos);
-        if (pos < 0)
+		pagelen = 1;
+        newpos = findpattern(filedata, filesize, pos);
+        if (newpos < 0)
             break;
+		
+		// if we didn't find the next page of an already-open ogg,
+		// then the open ogg is corrupt so remove it.
+		if (outfd >= 0 && newpos != pos) {
+			close(outfd);
+			remove(outfilename);
+			outfd = -1;
+		}
+		pos = newpos;
 
         oggdata = filedata + pos;
         if (ogg_ispage(oggdata)) {
-            pagelen = ogg_getlength(oggdata);
-
             if (outfd < 0 && ogg_isinitial(oggdata)) {
-                sprintf(outfilename, "%s_%08x.ogg", filename, pos);
+				pagelen = ogg_getlength(oggdata);
+                sprintf(outfilename, "%s_%d_%08lx.ogg", filename, numfiles, pos);
                 outfd = creat(outfilename, -1);
-                numfiles++;
             }
             if (outfd >= 0) {
+				pagelen = ogg_getlength(oggdata);
                 write(outfd, oggdata, pagelen);
                 if (ogg_isfinal(oggdata)) {
                     close(outfd);
                     outfd = -1;
+					numfiles++;
                 }
             }
         }

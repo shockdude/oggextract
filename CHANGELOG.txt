@@ -1,3 +1,10 @@
+November 29, 2020:
+    Fix handling of >4GB input blobs.
+    Fix potential infinite loop.
+    Add ogg count number to each output ogg filename.
+    Discard incomplete oggs.
+    Avoid accidentally skipping oggs.
+
 July 10, 2015:
     Fixed a small error reported by Sean Pepin.
 
